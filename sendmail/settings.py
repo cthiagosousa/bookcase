@@ -113,6 +113,14 @@ REST_FRAMEWORK = {
     ),
 }
 
+#SMTP Configuration
+
+EMAIL_HOST = 'smtp.ethereal.email'
+EMAIL_PORT = '587'
+EMAIL_HOST_USER = 'ashtyn.stamm@ethereal.email'
+EMAIL_HOST_PASSWORD = 'fC4jEcRnFdbvJhxyEJ'
+EMAIL_USE_TLS = True
+
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
 

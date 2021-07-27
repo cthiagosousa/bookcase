@@ -1,12 +1,14 @@
 from django.http.request import HttpRequest
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import BasePermission, IsAuthenticatedOrReadOnly
 from .serializers.book_serializer import BookSerializer
 from .serializers.user_serializer import UserSerializer
 from .models import Book
+from .email_messages import create_account
 
 class AccountViewSet(ModelViewSet):
     queryset = User.objects.all()
@@ -55,6 +57,13 @@ class AccountViewSet(ModelViewSet):
         user = User.objects.create_user(username, email, password)
         
         if user is not None:
+            send_mail(
+                create_account['subject'],
+                create_account['message'],
+                create_account['from'],
+                [email],
+            )
+
             return Response({
                 'message': 'Conta criada'
             })
