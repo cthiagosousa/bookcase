@@ -8,7 +8,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticatedOrReadOnly
 from .serializers.book_serializer import BookSerializer
 from .serializers.user_serializer import UserSerializer
 from .models import Book
-from .email_messages import create_account
+from .email_messages import create_account_message
 
 class AccountViewSet(ModelViewSet):
     queryset = User.objects.all()
@@ -16,60 +16,84 @@ class AccountViewSet(ModelViewSet):
     permission_classes = [BasePermission]
 
     def login(self, request: HttpRequest) -> Response:
-        email = request.data['email']
-        password = request.data['password']
+        email = str(request.data['email'])
+        password = str(request.data['password'])
+
+        if len(email.strip()) == 0 or len(password.strip()) == 0:
+            return Response({
+                'error': 'A campos vazios'
+            })
 
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            return Response({'error': 'Conta não encontrada'})
+            return Response({
+                'error': 'Conta não encontrada'
+                })
 
         auth_user = authenticate(username=user.username, password=password)
-        serializer = UserSerializer(auth_user)
+        data_user = UserSerializer(auth_user).data
+        data_user['password'] = password
 
         if auth_user is not None:
             login(request, auth_user)
-            
-            data_user = {
-                "id": serializer.data['id'],
-                "last_login": serializer.data['last_login'],
-                "is_superuser": serializer.data['is_superuser'],
-                "username": serializer.data['username'],
-                "email": serializer.data['email'],
-                "is_staff": serializer.data['is_staff'],
-                "is_active": serializer.data['is_active'],
-                "date_joined": serializer.data['date_joined'],
-                "groups": serializer.data['groups'],
-                "user_permissions": serializer.data['user_permissions']
-            }
+
+        return Response(data_user)
+
+    def create(self, request: HttpRequest) -> Response:
+        username = str(request.data['username'])
+        email = str(request.data['email'])
+        password = str (request.data['password'])
+        
+        if len(username.strip()) == 0 or len(email.split()) == 0 or len(password.strip()) == 0:
+            return Response({
+                'error': 'A campos vazios'
+            })
+
+        user = User.objects.create_user(username, email, password)
+        data_user = UserSerializer(user).data
+        data_user['password'] = password
+
+        if user is not None:
+            send_mail(
+                create_account_message['subject'],
+                create_account_message['message'],
+                create_account_message['from'],
+                [email],
+            )
 
             return Response(data_user)
 
         return Response({
-            'error': 'Conta não encontrada',
+            'error': 'Houve um problema ao criar a conta'
         })
 
-    def create(self, request: HttpRequest) -> Response:
-        username = request.data['username']
-        email = request.data['email']
-        password = request.data['password']
+    def update(self, request: HttpRequest, account_id: int) -> Response:
+        username = str(request.data['username'])
+        email = str(request.data['email'])
+        password = str(request.data['password'])
 
-        user = User.objects.create_user(username, email, password)
-        
-        if user is not None:
-            send_mail(
-                create_account['subject'],
-                create_account['message'],
-                create_account['from'],
-                [email],
-            )
-
+        if len(username.strip()) == 0 or len(email.split()) == 0 or len(password.strip()) == 0:
             return Response({
-                'message': 'Conta criada'
+                'error': 'A campos vazios'
             })
 
+        user = User.objects.get(id=account_id)
+        user.username = username
+        user.email = email
+        user.set_password(password)
+
+        user.save()
+
         return Response({
-            'error': 'Houve um problema ao criar a conta'
+            'message': 'Updated'
+            })
+    
+    def delete(self, request: HttpRequest, account_id: int) -> Response:
+        User.objects.get(id=account_id).delete()
+
+        return Response({
+            'message': 'Account deleted'
         })
 
 

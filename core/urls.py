@@ -6,6 +6,9 @@ from core import views
 urlpatterns = [
     path('api/login/', views.AccountViewSet.as_view({'post': 'login'})),
     path('api/create-account/', views.AccountViewSet.as_view({'post': 'create'})),
+    path('api/update-account/<int:account_id>', views.AccountViewSet.as_view({'put': 'update'})),
+    path('api/delete-account/<int:account_id>', views.AccountViewSet.as_view({'delete': 'delete'})),
+
     path('api/token/', TokenObtainPairView.as_view()),
     path('api/token/refresh/', TokenRefreshView.as_view()),
 
