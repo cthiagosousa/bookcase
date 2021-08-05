@@ -15,9 +15,20 @@ class AccountViewSet(ModelViewSet):
     permission_classes = [BasePermission]
 
     def account_details(self, request: HttpRequest, account_id: int):
-        user = User.objects.get(id=account_id)
-        data_user = UserSerializer(user).data
-        del data_user['password']
+        try:
+            user = User.objects.get(id=account_id)
+            data_user = UserSerializer(user).data
+            del data_user['password']
+        
+        except User.DoesNotExist:
+            return Response({
+                "error": "Esse usuário não existe"
+            })
+        
+        except Exception:
+            return Response({
+                "error": "Ocorreu um erro."
+            })
 
         return Response(data_user)
 
@@ -33,18 +44,24 @@ class AccountViewSet(ModelViewSet):
 
         try:
             user = User.objects.get(email=email)
+            auth_user = authenticate(username=user.username, password=password)
+
+            if auth_user is not None:
+                login(request, auth_user)
+
+            data_user = UserSerializer(auth_user).data
+            del data_user['password']
+
         except User.DoesNotExist:
             return Response({
                 'error': 'Conta não encontrada'
                 })
-
-        auth_user = authenticate(username=user.username, password=password)
-        data_user = UserSerializer(auth_user).data
-        del data_user['password']
-
-        if auth_user is not None:
-            login(request, auth_user)
-
+                
+        except Exception:
+            return Response({
+                "error": "Ocorreu um erro"
+            })
+        
         return Response(data_user)
 
     def create(self, request: HttpRequest) -> Response:
@@ -103,7 +120,7 @@ class AccountViewSet(ModelViewSet):
         User.objects.get(id=account_id).delete()
 
         return Response({
-            'message': 'Account deleted'
+            'success': 'Conta deletada'
         })
 
 
@@ -119,8 +136,19 @@ class BookViewSet(ModelViewSet):
         return Response(serializer.data)
     
     def get_by_id(self, request: HttpRequest, book_id: str) -> Response:
-        book = Book.objects.get(id=book_id)
-        serializer = BookSerializer(book)
+        try:
+            book = Book.objects.get(id=book_id)
+            serializer = BookSerializer(book)
+        
+        except Book.DoesNotExist:
+            return Response({
+                "error": "Esse livro não existe."
+            })
+        
+        except Exception:
+            return Response({
+                "error": "Ocorreu um erro."
+            })
         
         return Response(serializer.data)
 
@@ -134,54 +162,87 @@ class BookViewSet(ModelViewSet):
         
         try:
             book = Book.objects.get(id=book_id)
+
+            if book.users.filter(id=user.id):
+                return Response({
+                    "error": "Usuário já alugou esse livro."
+                })
+
+            if book.available_quantity == 0:
+                return Response({
+                    "error": "Livro esgotado."
+                })
+
+            book.users.add(user)
+            book.available_quantity = book.available_quantity - 1
+            book.save()
+
+            send_mail(
+                subject=f'Olá {user.username}, obrigado por alugar o livro {book.title}!',
+
+                message=f'''Você acabou de alugar "{book.title}", não esqueça de devolver seu livro após a leitura.''',
+
+                from_email='sendmail@project.com',
+                recipient_list=[user.email],
+            )
+            
         except Book.DoesNotExist:
             return Response({
                 "error": "Livro não encontrado."
             })
-        
-        if book.users.get(id=user.id):
+
+        except Exception as error:
+            print(error)
             return Response({
-                "error": "Usuário já alugou esse livro."
+                "error": "Ocorreu um erro"
             })
 
-        if book.available_quantity == 0:
-            return Response({
-                "error": "Livro esgotado."
-            })
+        return Response({
+            "success": "Livro alugado."
+        })
 
-        book.users.add(user)
-        book.available_quantity = book.available_quantity - 1
-        book.save()
-
-        serializer = BookSerializer(book)
-
-        return Response(serializer.data)
-
-    def refund(self, request: HttpRequest, book_id: str):
+    def refund(self, request: HttpRequest, book_id: str) -> Response:
         user = request.user
-
-        try: 
-            book = Book.objects.get(id=book_id)
-        except Book.DoesNotExist:
-            return Response({
-                "error": "Livro não encontrado"
-            })
 
         if user == AnonymousUser:
             return Response({
                 "error": "Precisa de um usuário logado."
             })
 
-        if not user.books.get(id=book_id):
+        try: 
+            book = Book.objects.get(id=book_id)
+
+            if not user.books.filter(id=book_id):
+                return Response({
+                    "error": "Usuário não alugou esse livro."
+                })
+
+            user.books.remove(book)
+            book.available_quantity = book.available_quantity + 1
+            user.save()
+            book.save()
+
+            send_mail(
+                subject=f'Olá {user.username}, espero que tenha tido uma boa leitura!',
+
+                message=f'''Você devolveu "{book.title}" com sucesso, 
+                fique a vontade para alugar qualquer outro livro de nossa estante.''',
+
+                from_email='sendmail@project.com',
+                recipient_list=[user.email],
+            )
+
+        except Book.DoesNotExist:
             return Response({
-                "error": "Usuário não alugou esse livro."
+                "error": "Livro não encontrado"
             })
 
-        user.books.remove(book)
-        book.available_quantity = book.available_quantity + 1
-        user.save()
-        book.save()
+        except Exception as error:
+            print(error)
+            return Response({
+                "error": "Ocorreu algum erro."
+            })
 
         return Response({
-            "success": "Livro devolvido."
-        })
+                "success": "Livro devolvido."
+            })
