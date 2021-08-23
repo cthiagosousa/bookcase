@@ -105,6 +105,8 @@ class AccountViewSet(ModelViewSet):
                 'error': 'A campos vazios'
             })
 
+        print(request.user)
+
         user = User.objects.get(id=account_id)
         user.username = username
         user.email = email
